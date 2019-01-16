@@ -1,0 +1,172 @@
+<?xml version="1.0"?>
+<block>
+    <name>RSP1 Source</name>
+    <key>sdrplay_rsp1_source</key>
+    <category>SDRplay</category>
+    <flags>throttle</flags>
+    <import>import sdrplay</import>
+    <make>sdrplay.rsp1_source($rf_freq, $bw, $agc_enabled, $if_atten_db, $dc_offset_mode, $iq_balance_mode,
+        $debug_enabled, $ifType, $lo_mode, $sample_rate, $lna_atten_step, $device_serial)
+    </make>
+
+    <callback>set_rf_freq($rf_freq)</callback>
+    <callback>set_agc_enabled($agc_enabled)</callback>
+    <callback>set_if_atten_db($if_atten_db)</callback>
+    <callback>set_lna_atten_step($lna_atten_step)</callback>
+
+    <param>
+        <name>Sample Rate (sps)</name>
+        <key>sample_rate</key>
+        <value>samp_rate</value>
+        <type>real</type>
+    </param>
+
+    <param>
+        <name>RF frequency</name>
+        <key>rf_freq</key>
+        <value>100e6</value>
+        <type>real</type>
+    </param>
+
+    <param>
+        <name>Bandwidth</name>
+        <key>bw</key>
+        <value>1536</value>
+        <type>enum</type>
+        <option>
+            <name>200 kHz</name>
+            <key>200</key>
+        </option>
+        <option>
+            <name>300 kHz</name>
+            <key>300</key>
+        </option>
+        <option>
+            <name>600 kHz</name>
+            <key>400</key>
+        </option>
+        <option>
+            <name>1.536 MHz</name>
+            <key>1536</key>
+        </option>
+        <option>
+            <name>5 MHz</name>
+            <key>5000</key>
+        </option>
+        <option>
+            <name>6 MHz</name>
+            <key>6000</key>
+        </option>
+        <option>
+            <name>7 MHz</name>
+            <key>7000</key>
+        </option>
+        <option>
+            <name>8 MHz</name>
+            <key>8000</key>
+        </option>
+    </param>
+
+    <param>
+        <name>LO Mode</name>
+        <key>lo_mode</key>
+        <value>1</value>
+        <type>enum</type>
+        <option>
+            <name>Auto - 1</name>
+            <key>1</key>
+        </option>
+        <option>
+            <name>120MHz - 2</name>
+            <key>2</key>
+        </option>
+        <option>
+            <name>144MHz - 3</name>
+            <key>3</key>
+        </option>
+        <option>
+            <name>168MHz - 4</name>
+            <key>4</key>
+        </option>
+    </param>
+
+    <param>
+        <name>IF Type</name>
+        <key>ifType</key>
+        <value>0</value>
+        <type>enum</type>
+        <option>
+            <name>IF_Zero - 0</name>
+            <key>0</key>
+        </option>
+        <option>
+            <name>450 kHz - 450</name>
+            <key>450</key>
+        </option>
+        <option>
+            <name>1.620 MHz - 1620</name>
+            <key>1620</key>
+        </option>
+        <option>
+            <name>2048 MHz - 2048</name>
+            <key>2048</key>
+        </option>
+    </param>
+
+    <param>
+        <name>AGC</name>
+        <key>agc_enabled</key>
+        <value>True</value>
+        <type>bool</type>
+    </param>
+
+    <param>
+        <name>DeviceIndex</name>
+        <key>device_serial</key>
+        <value>'0'</value>
+        <type>string</type>
+    </param>
+
+    <param>
+        <name>IF Attenuation (dB)</name>
+        <key>if_atten_db</key>
+        <value>40</value>
+        <type>real</type>
+    </param>
+
+    <param>
+        <name>LNA ON/OFF</name>
+        <key>lna_atten_step</key>
+        <value>0</value>
+        <type>bool</type>
+    </param>
+
+    <param>
+        <name>DC Offset Mode</name>
+        <key>dc_offset_mode</key>
+        <value>True</value>
+        <type>bool</type>
+    </param>
+
+    <param>
+        <name>IQ Balance Mode</name>
+        <key>iq_balance_mode</key>
+        <value>True</value>
+        <type>bool</type>
+    </param>
+
+    <param>
+        <name>Debug</name>
+        <key>debug_enabled</key>
+        <value>False</value>
+        <type>bool</type>
+    </param>
+
+    <source>
+        <name>out</name>
+        <type>complex</type>
+    </source>
+    <doc>
+    The SDRplay RSP1 Source block
+    </doc>
+</block>
