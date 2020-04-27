@@ -62,5 +62,5 @@ install(
     FILES
     sdrplay_swig.i
     ${CMAKE_CURRENT_BINARY_DIR}/sdrplay_swig_doc.i
-    DESTINATION ${GR_INCLUDE_DIR}/sdrplay/swig
+    DESTINATION ${GR_INCLUDE_DIR}/swig
 )

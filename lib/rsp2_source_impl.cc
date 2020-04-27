@@ -59,12 +59,9 @@ namespace gr {
             dev->list_available_rsp_devices();
             dev->set_debug_mode(debug_enabled);
             dev->set_center_freq(rf_freq);
-            dev->set_bandwidth(bw * 1000);
             dev->set_gain_mode(agc_enabled);
             dev->set_dc_offset_mode(dc_offset_mode);
             dev->set_iq_balance_mode(iq_balance_mode);
-            dev->set_if_type(if_type);
-            dev->set_lo_mode(lo_mode);
             dev->set_sample_rate(sample_rate);
             dev->set_gain(if_atten_db, "IF_ATTEN_DB");
             dev->set_gain(lna_atten_step, "LNA_ATTEN_STEP");
@@ -73,7 +70,7 @@ namespace gr {
         }
 
         rsp2_source_impl::~rsp2_source_impl() {
-            dev->stopStreaming();
+            dev->stop();
             delete dev;
         }
 
@@ -82,8 +79,8 @@ namespace gr {
                                gr_vector_const_void_star &input_items,
                                gr_vector_void_star &output_items) {
 
-            gr_complex *out = (gr_complex *) output_items[0];
-            return noutput_items - dev->fetch_work_buffer(out, noutput_items);;
+            return noutput_items - dev->fetch_work_buffers(output_items,
+                                                           noutput_items);
         }
 
         void rsp2_source_impl::set_rf_freq(float rf_freq) {

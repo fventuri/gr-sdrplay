@@ -5,9 +5,27 @@
     <category>SDRplay</category>
     <flags>throttle</flags>
     <import>import sdrplay</import>
-    <make>sdrplay.rspduo_source($tuner, $rspduo_mode, $rf_freq, $bw, $agc_enabled, $if_atten_db, $dc_offset_mode, $iq_balance_mode,
-        $debug_enabled, $ifType, $lo_mode, $sample_rate, $bcast_notch, $dab_notch, $lna_atten_step, $biasT,
-        $device_serial, $antenna)
+    <make>sdrplay.rspduo_source(
+        '$rspduo_mode',
+        #if $rspduo_mode() == 'ST'
+        $sample_rate_single_tuner,
+        #else
+        $sample_rate_non_single_tuner,
+        #end if
+        $rf_freq,
+        '$antenna',
+        $device_serial,
+        $agc_enabled,
+        $if_atten_db,
+        $lna_atten_step,
+        $bcast_notch,
+        $dab_notch,
+        '$output_type',
+        $dc_offset_mode,
+        $iq_balance_mode,
+        $biasT,
+        $debug_enabled
+    )
     </make>
 
     <callback>set_rf_freq($rf_freq)</callback>
@@ -16,41 +34,137 @@
     <callback>set_biasT($biasT)</callback>
     <callback>set_lna_atten_step($lna_atten_step)</callback>
 
-    <param>
-        <name>Tuner</name>
-        <key>tuner</key>
-        <value>1</value>
-        <type>enum</type>
-        <option>
-            <name>Tuner A</name>
-            <key>1</key>
-        </option>
-        <option>
-            <name>Tuner B</name>
-            <key>2</key>
-        </option>
-    </param>
-
+    <!-- General -->
     <param>
         <name>RSPduo mode</name>
         <key>rspduo_mode</key>
-        <value>single_tuner</value>
         <type>enum</type>
+        <hide>none</hide>
         <option>
             <name>Single Tuner</name>
-            <key>1</key>
+            <key>ST</key>
+            <opt>num_outputs:1</opt>
         </option>
         <option>
-            <name>Master/Slave</name>
-            <key>2</key>
+            <name>Dual Tuner</name>
+            <key>DT</key>
+            <opt>num_outputs:2</opt>
+        </option>
+        <option>
+            <name>Master</name>
+            <key>MA6</key>
+            <opt>num_outputs:1</opt>
+        </option>
+        <option>
+            <name>Master (RSPduo sample rate=8MHz)</name>
+            <key>MA8</key>
+            <opt>num_outputs:1</opt>
+        </option>
+        <option>
+            <name>Slave</name>
+            <key>SL</key>
+            <opt>num_outputs:1</opt>
         </option>
     </param>
 
     <param>
-        <name>Sample Rate (sps)</name>
-        <key>sample_rate</key>
-        <value>samp_rate</value>
-        <type>real</type>
+        <name>Sample Rate ST (Hz)</name>
+        <key>sample_rate_single_tuner</key>
+        <value></value>
+        <type>enum</type>
+        <hide>#if $rspduo_mode() == 'ST' then 'none' else 'all'#</hide>
+        <option>
+            <name>62500</name>
+            <key>62500</key>
+        </option>
+        <option>
+            <name>125000</name>
+            <key>125000</key>
+        </option>
+        <option>
+            <name>250000</name>
+            <key>250000</key>
+        </option>
+        <option>
+            <name>500000</name>
+            <key>500000</key>
+        </option>
+        <option>
+            <name>1000000</name>
+            <key>1000000</key>
+        </option>
+        <option>
+            <name>2000000</name>
+            <key>2000000</key>
+        </option>
+        <option>
+            <name>2048000</name>
+            <key>2048000</key>
+        </option>
+        <option>
+            <name>3000000</name>
+            <key>3000000</key>
+        </option>
+        <option>
+            <name>4000000</name>
+            <key>4000000</key>
+        </option>
+        <option>
+            <name>5000000</name>
+            <key>5000000</key>
+        </option>
+        <option>
+            <name>6000000</name>
+            <key>6000000</key>
+        </option>
+        <option>
+            <name>7000000</name>
+            <key>7000000</key>
+        </option>
+        <option>
+            <name>8000000</name>
+            <key>8000000</key>
+        </option>
+        <option>
+            <name>9000000</name>
+            <key>9000000</key>
+        </option>
+        <option>
+            <name>10000000</name>
+            <key>10000000</key>
+        </option>
+    </param>
+
+    <param>
+        <name>Sample Rate NST (Hz)</name>
+        <key>sample_rate_non_single_tuner</key>
+        <value></value>
+        <type>enum</type>
+        <hide>#if $rspduo_mode() != 'ST' then 'none' else 'all'#</hide>
+        <option>
+            <name>62500</name>
+            <key>62500</key>
+        </option>
+        <option>
+            <name>125000</name>
+            <key>125000</key>
+        </option>
+        <option>
+            <name>250000</name>
+            <key>250000</key>
+        </option>
+        <option>
+            <name>500000</name>
+            <key>500000</key>
+        </option>
+        <option>
+            <name>1000000</name>
+            <key>1000000</key>
+        </option>
+        <option>
+            <name>2000000</name>
+            <key>2000000</key>
+        </option>
     </param>
 
     <param>
@@ -61,122 +175,38 @@
     </param>
 
     <param>
-        <name>Bandwidth</name>
-        <key>bw</key>
-        <value>1536</value>
-        <type>enum</type>
-        <option>
-            <name>200 kHz</name>
-            <key>200</key>
-        </option>
-        <option>
-            <name>300 kHz</name>
-            <key>300</key>
-        </option>
-        <option>
-            <name>600 kHz</name>
-            <key>400</key>
-        </option>
-        <option>
-            <name>1.536 MHz</name>
-            <key>1536</key>
-        </option>
-        <option>
-            <name>5 MHz</name>
-            <key>5000</key>
-        </option>
-        <option>
-            <name>6 MHz</name>
-            <key>6000</key>
-        </option>
-        <option>
-            <name>7 MHz</name>
-            <key>7000</key>
-        </option>
-        <option>
-            <name>8 MHz</name>
-            <key>8000</key>
-        </option>
-    </param>
-
-    <param>
-        <name>LO Mode</name>
-        <key>lo_mode</key>
-        <value>1</value>
-        <type>enum</type>
-        <option>
-            <name>Auto - 1</name>
-            <key>1</key>
-        </option>
-        <option>
-            <name>120MHz - 2</name>
-            <key>2</key>
-        </option>
-        <option>
-            <name>144MHz - 3</name>
-            <key>3</key>
-        </option>
-        <option>
-            <name>168MHz - 4</name>
-            <key>4</key>
-        </option>
-    </param>
-
-    <param>
         <name>Antenna</name>
         <key>antenna</key>
-        <value>'T1_50ohm'</value>
+        <value>T1_50ohm</value>
         <type>enum</type>
         <option>
             <name>Tuner1 50ohm</name>
-            <key>'T1_50ohm'</key>
+            <key>T1_50ohm</key>
         </option>
         <option>
             <name>Tuner 2_50ohm</name>
-            <key>'T2_50ohm'</key>
+            <key>T2_50ohm</key>
         </option>
         <option>
             <name>High Z</name>
-            <key>'HIGHZ'</key>
+            <key>HIGHZ</key>
         </option>
-
-    </param>
-
-    <param>
-        <name>IF Type</name>
-        <key>ifType</key>
-        <value>0</value>
-        <type>enum</type>
-        <option>
-            <name>IF_Zero - 0</name>
-            <key>0</key>
-        </option>
-        <option>
-            <name>450 kHz - 450</name>
-            <key>450</key>
-        </option>
-        <option>
-            <name>1.620 MHz - 1620</name>
-            <key>1620</key>
-        </option>
-        <option>
-            <name>2048 MHz - 2048</name>
-            <key>2048</key>
-        </option>
-    </param>
-
-    <param>
-        <name>AGC</name>
-        <key>agc_enabled</key>
-        <value>True</value>
-        <type>bool</type>
     </param>
 
     <param>
         <name>DeviceIndex or Serial#</name>
         <key>device_serial</key>
-        <value>'0'</value>
         <type>string</type>
+    </param>
+
+    <!-- Gain Options -->
+    <param>
+        <name>AGC</name>
+        <key>agc_enabled</key>
+        <value>True</value>
+        <type>bool</type>
+        <hide>part</hide>
+        <tab>Gain Options</tab>
     </param>
 
     <param>
@@ -184,6 +214,8 @@
         <key>if_atten_db</key>
         <value>40</value>
         <type>real</type>
+        <hide>part</hide>
+        <tab>Gain Options</tab>
     </param>
 
     <param>
@@ -191,21 +223,18 @@
         <key>lna_atten_step</key>
         <value>0</value>
         <type>real</type>
+        <hide>part</hide>
+        <tab>Gain Options</tab>
     </param>
 
-
-    <param>
-        <name>DC Offset Mode</name>
-        <key>dc_offset_mode</key>
-        <value>True</value>
-        <type>bool</type>
-    </param>
-
+    <!-- Filter Options -->
     <param>
         <name>Broadcast Notch Filter</name>
         <key>bcast_notch</key>
         <value>False</value>
         <type>bool</type>
+        <hide>part</hide>
+        <tab>Filter Options</tab>
     </param>
 
     <param>
@@ -213,6 +242,34 @@
         <key>dab_notch</key>
         <value>False</value>
         <type>bool</type>
+        <hide>part</hide>
+        <tab>Filter Options</tab>
+    </param>
+
+    <!-- Other options -->
+    <param>
+        <name>Output Type</name>
+        <key>output_type</key>
+        <type>enum</type>
+        <hide>part</hide>
+        <option>
+            <name>Complex float32</name>
+            <key>fc32</key>
+        </option>
+        <option>
+            <name>Complex int16 (native)</name>
+            <key>sc16</key>
+        </option>
+        <tab>Other Options</tab>
+    </param>
+
+    <param>
+        <name>DC Offset Mode</name>
+        <key>dc_offset_mode</key>
+        <value>True</value>
+        <type>bool</type>
+        <hide>part</hide>
+        <tab>Other Options</tab>
     </param>
 
     <param>
@@ -220,6 +277,8 @@
         <key>iq_balance_mode</key>
         <value>True</value>
         <type>bool</type>
+        <hide>part</hide>
+        <tab>Other Options</tab>
     </param>
 
     <param>
@@ -227,6 +286,8 @@
         <key>biasT</key>
         <value>False</value>
         <type>bool</type>
+        <hide>part</hide>
+        <tab>Other Options</tab>
     </param>
 
     <param>
@@ -234,13 +295,37 @@
         <key>debug_enabled</key>
         <value>False</value>
         <type>bool</type>
+        <hide>part</hide>
+        <tab>Other Options</tab>
     </param>
+
 
     <source>
         <name>out</name>
-        <type>complex</type>
+        <type>$output_type</type>
+        <nports>$rspduo_mode.num_outputs</nports>
     </source>
+
     <doc>
-        The SDRplay RSPduo Source block
+The SDRplay RSPduo Source Block:
+
+Device Selector:
+The device selector is a delimited string used to locate SDRplay devices on your system. \
+If left blank, the first SDRplay RSPduo found will be used. \
+Use the device serial number to specify a specific device.
+Example: 1234567890
+
+RSPduo Mode:
+This parameter selects the operating mode of the RSPduo device.
+Valid selections are:
+Single Tuner
+Dual Tuner
+Master (default sampling rate)
+Master (RSPduo sample rate=8MHz)
+Slave
+
+Output Type:
+This parameter controls the data type of the stream in gnuradio.
+
     </doc>
 </block>

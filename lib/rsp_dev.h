@@ -1,7 +1,8 @@
 /* -*- c++ -*- */
 /*
  * Copyright 2018 HB9FXQ, Frank Werner-Krippendorf.
- * Copyright 2019 Franco Venturi - changes for SDRplay API version 3
+ * Copyright 2020 Franco Venturi - changes for SDRplay API version 3
+ *                                 and Dual Tuner for RSPduo
  *
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,10 +25,12 @@
 #define GR_SDRPLAY_RSP_DEV_H
 
 #include <sdrplay_api.h>
+#include <set>
 #include <stdlib.h>
 #include <string>
 #include <vector>
 #include <gnuradio/gr_complex.h>
+#include <gnuradio/types.h>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
 
@@ -44,7 +47,7 @@ namespace gr {
 
             double set_sample_rate(double rate);
 
-            double get_sample_rate(void) const;
+            double get_sample_rate() const;
 
             double set_center_freq(double freq);
 
@@ -72,45 +75,76 @@ namespace gr {
 
             void set_debug_mode(int mode);
 
-            double set_bandwidth(double bandwidth);
+            double set_bandwidth();
 
             double get_bandwidth() const;
 
-            void startStreaming(void);
+            bool start_streaming();
 
-            void stopStreaming(void);
+            bool stop_streaming();
 
-            int fetch_work_buffer(gr_complex *grWorkBuffer, int noutput_items);
-
-            void set_if_type(int ifType);
-
-            void set_lo_mode(int lo_mode);
+            int fetch_work_buffers(gr_vector_void_star &output_items,
+                                   int noutput_items);
 
             void set_biasT(bool biasT);
 
             void set_deviceIndexOrSerial(const std::string &deviceIndexOrSerial);
 
-            void set_tuner(int tuner);
+            void set_rspduo_mode(const std::string& rspduo_mode);
 
-            void set_rspduo_mode(int rspduo_mode);
+            void set_output_type(const std::string& output_type);
+
+            static size_t output_size(const std::string& output_type);
+
+            void flush();
+
+            bool configure_rspduo();
+
+            bool select_rsp_device();
+
+            bool start();
+
+            bool release_rsp_device();
+
+            bool stop();
 
         private:
             void reinitDevice(int reason);
 
             int checkLNA(int lna);
 
+            template <class T>
+            bool process_overflow_buffer(int stream_index);
+
+            bool buffers_sanity_check(int nstreams);
+
+            static void *xcopy(gr_complex *dest, const short *srci,
+                               const short *srcq, int n);
+
+            static void *xcopy(short (*dest)[2], const short *srci,
+                               const short *srcq, int n);
+
+            template <class T>
             void streamCallback(short *xi, short *xq,
                                 sdrplay_api_StreamCbParamsT *params,
-                                unsigned int numSamples, unsigned int reset);
+                                unsigned int numSamples, unsigned int reset,
+                                int stream_index);
 
             void eventCallback(sdrplay_api_EventT eventId,
                                sdrplay_api_TunerSelectT tuner,
                                sdrplay_api_EventParamsT *params);
 
-            static void streamCallbackWrap(short *xi, short *xq,
-                                           sdrplay_api_StreamCbParamsT *params,
-                                           unsigned int numSamples, unsigned int reset,
-                                           void *cbContext);
+            template <class T>
+            static void streamACallbackWrap(short *xi, short *xq,
+                                            sdrplay_api_StreamCbParamsT *params,
+                                            unsigned int numSamples, unsigned int reset,
+                                            void *cbContext);
+
+            template <class T>
+            static void streamBCallbackWrap(short *xi, short *xq,
+                                            sdrplay_api_StreamCbParamsT *params,
+                                            unsigned int numSamples, unsigned int reset,
+                                            void *cbContext);
 
             static void discardStreamCallbackWrap(short *xi, short *xq,
                                                   sdrplay_api_StreamCbParamsT *params,
@@ -121,8 +155,6 @@ namespace gr {
                                           sdrplay_api_TunerSelectT tuner,
                                           sdrplay_api_EventParamsT *params,
                                           void *cbContext);
-
-            static int _refcount;
 
             bool _auto_gain;
             int _gRdB;
@@ -135,7 +167,6 @@ namespace gr {
             sdrplay_api_Bw_MHzT _bwType;
             sdrplay_api_If_kHzT _ifType;
             sdrplay_api_LoModeT _loMode;
-            int _samplesPerPacket;
             bool _dcMode;
             bool _iqMode;
             bool _debug;
@@ -143,23 +174,53 @@ namespace gr {
             sdrplay_api_DeviceT _device;
             sdrplay_api_DeviceParamsT *_deviceParams;
             sdrplay_api_RxChannelParamsT *_chParams;
+            sdrplay_api_RxChannelParamsT *_dualchParams;
             std::string _antenna;
             int _biasT;
             std::string _deviceIndexOrSerial;
-            int _tuner;
             int _rspduo_mode;
+            double _rspduo_sample_freq;
+            double _sample_rate;
+            enum OutputTypes {fc32=1, sc16=2};
+            enum OutputTypes _output_type;
 
-            bool _streaming;
-            gr_complex *_buffer;
-            int _bufferOffset;
-            int _bufferSpaceRemaining;
+            enum DeviceStatus {None=0, Selected=1, Streaming=2};
+            int _device_status;
+            void *_buffer[2];
+            int _bufferOffset[2];
+            int _bufferSpaceRemaining[2];
             boost::mutex _bufferMutex;
-            boost::condition_variable _bufferReady;  // buffer is ready to move to other thread
+            boost::condition_variable _bufferReady[2];
+
+            static const unsigned int OVERFLOW_BUFFER_SIZE = 2016;
+            short _overflowBuffer[2][2][OVERFLOW_BUFFER_SIZE];
+            int _overflowBufferFirst[2];
+            int _overflowBufferLast[2];
 
             bool _reinit;  // signal streamer to return after a reinit
         };
+
+        // Singleton class for SDRplay API (only one per process)
+        class sdrplay_api {
+        public:
+            static sdrplay_api& get_instance()
+            {
+                static sdrplay_api instance;
+                return instance;
+            }
+            void add_active_rsp(rsp_dev*);
+            void remove_active_rsp(rsp_dev*);
+
+        private:
+            std::set<rsp_dev*> active_rsps;
+            sdrplay_api();
+
+        public:
+            ~sdrplay_api();
+            sdrplay_api(sdrplay_api const&)    = delete;
+            void operator=(sdrplay_api const&) = delete;
+        };
     }
 }
-
 
 #endif //GR_SDRPLAY_RSP_DEV_H

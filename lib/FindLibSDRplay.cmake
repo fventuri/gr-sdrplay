@@ -2,7 +2,7 @@ if(NOT LIBSDRPLAY_FOUND)
     # pkg_check_modules (LIBSDRPLAY_PKG libsdrplay)
 
     IF(WIN32)
-        GET_FILENAME_COMPONENT(MIRICS_API_DIR "[HKEY_LOCAL_MACHINE\\SOFTWARE\\MiricsSDR\\API;Install_Dir]" ABSOLUTE)
+        GET_FILENAME_COMPONENT(SDRPLAY_API_DIR "[HKEY_LOCAL_MACHINE\\SOFTWARE\\SDRplaySDR\\API;Install_Dir]" ABSOLUTE)
 
         if( CMAKE_SIZEOF_VOID_P EQUAL 8 )
             MESSAGE( "64 bit compiler detected" )
@@ -14,14 +14,14 @@ if(NOT LIBSDRPLAY_FOUND)
             SET( EX_PLATFORM_NAME "x86" )
         endif( CMAKE_SIZEOF_VOID_P EQUAL 8 )
 
-        find_path(LIBSDRPLAY_INCLUDE_DIRS NAMES mir_sdr.h
+        find_path(LIBSDRPLAY_INCLUDE_DIRS NAMES sdrplay_api.h
                 PATHS
-                "${MIRICS_API_DIR}/inc"
+                "${SDRPLAY_API_DIR}/inc"
                 )
 
-        find_library(LIBSDRPLAY_LIBRARIES NAMES mir_sdr_api.lib
+        find_library(LIBSDRPLAY_LIBRARIES NAMES sdrply_api.lib
                 PATHS
-                "${MIRICS_API_DIR}/${EX_PLATFORM_NAME}"
+                "${SDRPLAY_API_DIR}/${EX_PLATFORM_NAME}"
                 )
     ELSE()
         find_path(LIBSDRPLAY_INCLUDE_DIRS NAMES sdrplay_api.h

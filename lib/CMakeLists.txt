@@ -33,7 +33,7 @@ list(APPEND sdrplay_sources
     rsp1a_source_impl.cc
     rsp2_source_impl.cc
     rspduo_source_impl.cc
-	rsp_dev.cc
+    rsp_dev.cc
 )
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
