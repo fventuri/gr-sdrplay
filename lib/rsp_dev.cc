@@ -410,9 +410,10 @@ void rsp_dev::reinitDevice(int reason)
     // Tell stream CB to return
     _reinit = true;
 
-    _chParams->tunerParams.gain.gRdB = gRdB;
     if (_deviceParams->devParams != NULL)
         _deviceParams->devParams->fsFreq.fsHz = _fsHz;
+
+    _chParams->tunerParams.gain.gRdB = gRdB;
     _chParams->tunerParams.rfFreq.rfHz = _rfHz;
     _chParams->tunerParams.bwType = _bwType;
     _chParams->tunerParams.ifType = _ifType;
@@ -422,6 +423,19 @@ void rsp_dev::reinitDevice(int reason)
     _chParams->ctrlParams.decimation.enable = _decim != 1;
     _chParams->ctrlParams.decimation.decimationFactor = _decim;
     _chParams->ctrlParams.decimation.wideBandSignal = 1;
+
+    if (_dualchParams != NULL) {
+        _dualchParams->tunerParams.gain.gRdB = gRdB;
+        _dualchParams->tunerParams.rfFreq.rfHz = _rfHz;
+        _dualchParams->tunerParams.bwType = _bwType;
+        _dualchParams->tunerParams.ifType = _ifType;
+        _dualchParams->tunerParams.gain.LNAstate = checkLNA(_lna);
+
+        // Set decimation with halfband filter
+        _dualchParams->ctrlParams.decimation.enable = _decim != 1;
+        _dualchParams->ctrlParams.decimation.decimationFactor = _decim;
+        _dualchParams->ctrlParams.decimation.wideBandSignal = 1;
+    }
 
     sdrplay_api_Update(_device.dev, _device.tuner, (sdrplay_api_ReasonForUpdateT)reason, sdrplay_api_Update_Ext1_None);
 
@@ -482,14 +496,25 @@ double rsp_dev::set_sample_rate(double rate)
             _chParams->ctrlParams.decimation.enable = _decim != 1;
             _chParams->ctrlParams.decimation.decimationFactor = _decim;
             _chParams->ctrlParams.decimation.wideBandSignal = 1;
+            if (_dualchParams != NULL) {
+                _dualchParams->ctrlParams.decimation.enable = _decim != 1;
+                _dualchParams->ctrlParams.decimation.decimationFactor = _decim;
+                _dualchParams->ctrlParams.decimation.wideBandSignal = 1;
+            }
             reason_for_update = (sdrplay_api_ReasonForUpdateT)(reason_for_update | sdrplay_api_Update_Ctrl_Decimation);
         }
         if (_ifType != prev_ifType) {
             _chParams->tunerParams.ifType = _ifType;
+            if (_dualchParams != NULL) {
+                _dualchParams->tunerParams.ifType = _ifType;
+            }
             reason_for_update = (sdrplay_api_ReasonForUpdateT)(reason_for_update | sdrplay_api_Update_Tuner_IfType);
         }
         if (_bwType != prev_bwType) {
             _chParams->tunerParams.bwType = _bwType;
+            if (_dualchParams != NULL) {
+                _dualchParams->tunerParams.bwType = _bwType;
+            }
             reason_for_update = (sdrplay_api_ReasonForUpdateT)(reason_for_update | sdrplay_api_Update_Tuner_BwType);
         }
         if (reason_for_update != sdrplay_api_Update_None)
@@ -510,10 +535,6 @@ double rsp_dev::set_center_freq(double freq)
 
     if (_device_status & Streaming)
     {
-        _chParams->tunerParams.rfFreq.rfHz = _rfHz;
-        if (_dualchParams != NULL) {
-            _dualchParams->tunerParams.rfFreq.rfHz = _rfHz;
-        }
         reinitDevice(sdrplay_api_Update_Tuner_Frf);
     }
 
@@ -534,11 +555,19 @@ bool rsp_dev::set_gain_mode(bool automatic)
         {
             _chParams->ctrlParams.agc.enable = sdrplay_api_AGC_5HZ; /*TODO: expose argument */
             _chParams->ctrlParams.agc.setPoint_dBfs = -30; /*TODO: magic number */
+            if (_dualchParams != NULL) {
+                _dualchParams->ctrlParams.agc.enable = sdrplay_api_AGC_5HZ; /*TODO: expose argument */
+                _dualchParams->ctrlParams.agc.setPoint_dBfs = -30; /*TODO: magic number */
+            }
         }
         else
         {
             _chParams->ctrlParams.agc.enable = sdrplay_api_AGC_DISABLE;
             _chParams->ctrlParams.agc.setPoint_dBfs = -30; /*TODO: magic number */
+            if (_dualchParams != NULL) {
+                _dualchParams->ctrlParams.agc.enable = sdrplay_api_AGC_DISABLE;
+                _dualchParams->ctrlParams.agc.setPoint_dBfs = -30; /*TODO: magic number */
+            }
         }
         _chParams->ctrlParams.agc.setPoint_dBfs = 0;
         _chParams->ctrlParams.agc.attack_ms = 0;
@@ -546,6 +575,14 @@ bool rsp_dev::set_gain_mode(bool automatic)
         _chParams->ctrlParams.agc.decay_delay_ms = 0;
         _chParams->ctrlParams.agc.decay_threshold_dB = 0;
         _chParams->ctrlParams.agc.syncUpdate = 0;
+        if (_dualchParams != NULL) {
+            _dualchParams->ctrlParams.agc.setPoint_dBfs = 0;
+            _dualchParams->ctrlParams.agc.attack_ms = 0;
+            _dualchParams->ctrlParams.agc.decay_ms = 0;
+            _dualchParams->ctrlParams.agc.decay_delay_ms = 0;
+            _dualchParams->ctrlParams.agc.decay_threshold_dB = 0;
+            _dualchParams->ctrlParams.agc.syncUpdate = 0;
+        }
 
         reinitDevice(sdrplay_api_Update_Ctrl_Agc);
     }
@@ -668,10 +705,14 @@ double rsp_dev::set_gain(double gain, const std::string &name)
             }
             else if (_hwVer == SDRPLAY_RSPduo_ID)
             {
-                if (_antenna == "HIGHZ")
+                if (_antenna == "HIGHZ") {
                     _chParams->rspDuoTunerParams.tuner1AmNotchEnable = _bcastNotch;
-                else
+                } else {
                     _chParams->rspDuoTunerParams.rfNotchEnable = _bcastNotch;
+                    if (_dualchParams != NULL) {
+                        _dualchParams->rspDuoTunerParams.rfNotchEnable = _bcastNotch;
+                    }
+                }
             }
         }
 
@@ -739,23 +780,37 @@ std::string rsp_dev::set_antenna(const std::string &antenna)
         }
         else if (_hwVer == SDRPLAY_RSPduo_ID)
         {
+            sdrplay_api_TunerSelectT new_tuner = _device.tuner;
             if (antenna == "HIGHZ")
             {
-                _device.tuner = sdrplay_api_Tuner_A;
+                new_tuner = sdrplay_api_Tuner_A;
                 _chParams->rspDuoTunerParams.tuner1AmPortSel = sdrplay_api_RspDuo_AMPORT_1;
             }
             else if (antenna == "T1_50ohm")
             {
-                _device.tuner = sdrplay_api_Tuner_A;
+                new_tuner = sdrplay_api_Tuner_A;
                 _chParams->rspDuoTunerParams.tuner1AmPortSel = sdrplay_api_RspDuo_AMPORT_2;
             }
             else
             {
-                _device.tuner = sdrplay_api_Tuner_B;
+                new_tuner = sdrplay_api_Tuner_B;
                 _chParams->rspDuoTunerParams.tuner1AmPortSel = sdrplay_api_RspDuo_AMPORT_2;
             }
 
-            reinitDevice(sdrplay_api_Update_RspDuo_AmPortSelect);
+            if (new_tuner != _device.tuner)
+            {
+                if (_device_status & Streaming)
+                {
+                    sdrplay_api_SwapRspDuoActiveTuner(_device.dev, &_device.tuner, _chParams->rspDuoTunerParams.tuner1AmPortSel);
+                }
+                else
+                {
+                    _device.tuner = new_tuner;
+                }
+
+            }
+            // don't think I need this one - fv
+            //reinitDevice(sdrplay_api_Update_RspDuo_AmPortSelect);
         }
     }
     return antenna;
