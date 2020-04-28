@@ -95,10 +95,10 @@ namespace gr {
             dev->set_gain(if_atten_db, "IF_ATTEN_DB");
         }
 
-
         void rsp2_source_impl::set_lna_atten_step(int lna_atten_step) {
             dev->set_gain(lna_atten_step, "LNA_ATTEN_STEP");
         }
+
     } /* namespace rsp */
 } /* namespace gr */
 

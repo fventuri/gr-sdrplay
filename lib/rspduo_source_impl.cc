@@ -102,6 +102,14 @@ namespace gr {
                                                            noutput_items);
         }
 
+        bool rspduo_source_impl::start() {
+            return dev->start();
+        }
+
+        bool rspduo_source_impl::stop() {
+            return dev->stop();
+        }
+
         void rspduo_source_impl::set_rf_freq(float rf_freq) {
             dev->set_center_freq(rf_freq);
         }
@@ -120,16 +128,6 @@ namespace gr {
 
         void rspduo_source_impl::set_lna_atten_step(int lna_atten_step) {
             dev->set_gain(lna_atten_step, "LNA_ATTEN_STEP");
-        }
-
-        void rspduo_source_impl::flush() {
-            dev->flush();
-        }
-        bool rspduo_source_impl::start() {
-            return dev->start();
-        }
-        bool rspduo_source_impl::stop() {
-            return dev->stop();
         }
 
     } /* namespace rsp */

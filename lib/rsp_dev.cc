@@ -40,9 +40,6 @@
 #include <string>
 #include <mutex>
 #include <sdrplay_api.h>
-// fv
-#include <chrono>
-#include <thread>
 
 namespace gr
 {
@@ -285,6 +282,152 @@ void rsp_dev::eventCallbackWrap(sdrplay_api_EventT eventId,
     obj->eventCallback(eventId, tuner, params);
 }
 
+bool rsp_dev::start() {
+    if (_device_status & Streaming)
+    {
+        return true;
+    }
+
+    if (!(_device_status & Selected))
+    {
+        if (!select_rsp_device()) {
+            return false;
+        }
+        sdrplay_api::get_instance().add_active_rsp(this);
+    }
+
+    if (!(_device_status & Streaming))
+    {
+        if (!start_streaming()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool rsp_dev::configure_rspduo()
+{
+    // set RSPduo mode
+    if (!(_rspduo_mode & _device.rspDuoMode))
+    {
+        std::cerr << "Invalid RSPduo mode - valid modes are: " << _device.rspDuoMode << std::endl;
+        return false;
+    }
+    _device.rspDuoMode = (sdrplay_api_RspDuoModeT)_rspduo_mode;
+
+    // set RSPduo mode
+    _device.tuner = sdrplay_api_Tuner_Neither;
+    if (_rspduo_mode == sdrplay_api_RspDuoMode_Single_Tuner ||
+        _rspduo_mode == sdrplay_api_RspDuoMode_Master)
+    {
+        if (_antenna == "T1_50ohm" || _antenna == "HIGHZ")
+        {
+            _device.tuner = sdrplay_api_Tuner_A;
+        }
+        else if (_antenna == "T2_50ohm")
+        {
+            _device.tuner = sdrplay_api_Tuner_B;
+        }
+    }
+
+    // check antenna configuraion in slave mode
+    if (_rspduo_mode == sdrplay_api_RspDuoMode_Slave)
+    {
+        if (_device.tuner == sdrplay_api_Tuner_A &&
+            !(_antenna == "T1_50ohm" || _antenna == "HIGHZ"))
+        {
+            _antenna = "T1_50ohm";
+            std::cerr << "Invalid RSPduo antenna in slave mode - forcing " << _antenna << " antenna" << std::endl;
+        }
+        else if (_device.tuner == sdrplay_api_Tuner_B &&
+                 !(_antenna == "T2_50ohm"))
+        {
+            _antenna = "T2_50ohm";
+            std::cerr << "Invalid RSPduo antenna in slave mode - forcing " << _antenna << " antenna" << std::endl;
+        }
+    }
+
+    // set sample freq
+    if (_rspduo_mode == sdrplay_api_RspDuoMode_Dual_Tuner ||
+        _rspduo_mode == sdrplay_api_RspDuoMode_Master)
+    {
+        _device.rspDuoSampleFreq = _rspduo_sample_freq;
+    }
+
+    return true;
+}
+
+bool rsp_dev::select_rsp_device()
+{
+    unsigned int numDevices;
+    sdrplay_api_DeviceT sdrplayDevices[MAX_SUPPORTED_DEVICES];
+    sdrplay_api_LockDeviceApi();
+    sdrplay_api_GetDevices(sdrplayDevices, &numDevices, MAX_SUPPORTED_DEVICES);
+
+    int _devIndex = 0;
+
+    if (_deviceIndexOrSerial.length() > 2 /*It's a SerialNo*/)
+    {
+        bool match = false;
+
+        for (unsigned int i = 0; i < numDevices; i++)
+        {
+            if (_deviceIndexOrSerial.compare(std::string(sdrplayDevices[i].SerNo)) == 0)
+            {
+                std::cerr << "Found requested RSP with SerialNO: " << sdrplayDevices[i].SerNo << std::endl;
+                _devIndex = i;
+                match = true;
+                break;
+            }
+        }
+
+        if (!match)
+        {
+            std::cerr << "FALLBACK TO DEV INDEX = !!!! Could NOT find RSP SerialNO: " << _deviceIndexOrSerial << std::endl;
+        }
+    } else {
+        _devIndex = strtol(_deviceIndexOrSerial.c_str(), NULL, 0);
+        if (_devIndex < 0 || _devIndex >= numDevices) {
+            std::cerr << "FALLBACK TO DEV INDEX = 0 !!!! Could NOT find RSP with index: " << _deviceIndexOrSerial << std::endl;
+        }
+    }
+
+    _device = sdrplayDevices[_devIndex];
+    _hwVer = _device.hwVer;
+
+    if (_hwVer == SDRPLAY_RSPduo_ID)
+    {
+        if (!configure_rspduo())
+            return false;
+    }
+
+    sdrplay_api_SelectDevice(&_device);
+    sdrplay_api_UnlockDeviceApi();
+
+    _device_status |= Selected;
+
+    std::cerr << "Using SDRplay " << hwName(_hwVer) << " "
+              << sdrplayDevices[_devIndex].SerNo << std::endl;
+
+    sdrplay_api_DebugEnable(_device.dev, _debug ? sdrplay_api_DbgLvl_Verbose : sdrplay_api_DbgLvl_Disable);
+
+    sdrplay_api_GetDeviceParams(_device.dev, &_deviceParams);
+
+    _chParams = _deviceParams->rxChannelA;
+    _dualchParams = NULL;
+    if (_device.tuner == sdrplay_api_Tuner_B)
+    {
+        _chParams = _deviceParams->rxChannelB;
+    }
+    else if (_device.tuner == sdrplay_api_Tuner_Both)
+    {
+        _dualchParams = _deviceParams->rxChannelB;
+    }
+
+    return true;
+}
+
 bool rsp_dev::start_streaming()
 {
     set_biasT(_biasT);
@@ -378,7 +521,37 @@ bool rsp_dev::start_streaming()
     return true;
 }
 
-bool rsp_dev::stop_streaming(void)
+bool rsp_dev::stop() {
+    if (_device_status == None)
+    {
+        return true;
+    }
+
+    if (_device_status & Streaming)
+    {
+        if (!stop_streaming()) {
+            return false;
+        }
+    }
+
+    if (_device_status & Selected)
+    {
+        if (!release_rsp_device()) {
+            return false;
+        }
+        sdrplay_api::get_instance().remove_active_rsp(this);
+    }
+    return true;
+}
+
+bool rsp_dev::release_rsp_device()
+{
+    sdrplay_api_ReleaseDevice(&_device);
+    _device_status &= ~Selected;
+    return true;
+}
+
+bool rsp_dev::stop_streaming()
 {
     sdrplay_api_ErrT err;
     err = sdrplay_api_Uninit(_device.dev);
@@ -865,120 +1038,6 @@ double rsp_dev::get_bandwidth() const
     return (double)_bwType * 1e3;
 }
 
-// pull the samples from the overflow buffer, returns true if there's still
-// space left in in the gnuradio buffer
-template <class T>
-bool rsp_dev::process_overflow_buffer(int si)
-{
-    int num_overflow = _overflowBufferLast[si] - _overflowBufferFirst[si];
-    if (num_overflow == 0)
-        return true;
-    T *buf = static_cast<T*>(_buffer[si]) + _bufferOffset[si];
-    int ncopy = std::min(num_overflow, _bufferSpaceRemaining[si]);
-    short *xi = _overflowBuffer[si][0] + _overflowBufferFirst[si];
-    short *xq = _overflowBuffer[si][1] + _overflowBufferFirst[si];
-    xcopy(buf, xi, xq, ncopy);
-    _bufferOffset[si] += ncopy;
-    _bufferSpaceRemaining[si] -= ncopy;
-    _overflowBufferFirst[si] += ncopy;
-    if (_overflowBufferFirst[si] == _overflowBufferLast[si])
-    {
-        _overflowBufferFirst[si] = 0;
-        _overflowBufferLast[si]  = 0;
-    }
-    return _bufferSpaceRemaining[si] > 0;
-}
-
-// makes sure that bufferSpaceRemaining == 0 and that all the overflow buffers
-// have the same number of samples
-bool rsp_dev::buffers_sanity_check(int nstreams)
-{
-    bool is_ok = true;
-    for (int stream_index = 0; stream_index < nstreams; ++stream_index)
-    {
-        if (_bufferSpaceRemaining[stream_index] != 0)
-        {
-             std::cerr << "stream " << stream_index << " has still space remanining\n";
-             is_ok = false;
-        }
-    }
-    if (nstreams == 1)
-        return is_ok;
-    int num_overflow[2] = { _overflowBufferLast[0] - _overflowBufferFirst[0],
-                            _overflowBufferLast[1] - _overflowBufferFirst[1] };
-    int min_overflow = std::min(num_overflow[0], num_overflow[1]);
-    for (int stream_index = 0; stream_index < nstreams; ++stream_index)
-    {
-        if (num_overflow[stream_index] > min_overflow)
-        {
-             std::cerr << "discarding " << (num_overflow[stream_index] - min_overflow) << " items (" << _overflowBufferFirst[0] << ", " << _overflowBufferLast[0] << ") and (" << _overflowBufferFirst[1] << ", " << _overflowBufferLast[1] << ") from stream " << stream_index << "\n";
-             _overflowBufferLast[stream_index] = _overflowBufferFirst[stream_index] + min_overflow;
-             is_ok = false;
-        }
-    }
-    return is_ok;
-}
-
-int rsp_dev::fetch_work_buffers(gr_vector_void_star &output_items,
-                                int noutput_items)
-{
-    if (!(_device_status & Streaming))
-    {
-        std::cerr << "device is not streaming\n";
-        return noutput_items;
-    }
-
-    int nstreams = output_items.size();
-
-    {
-        boost::mutex::scoped_lock lock(_bufferMutex);
-        bool hasSpaceRemaining[2];
-        for (int stream_index = 0; stream_index < nstreams; ++stream_index)
-        {
-            _buffer[stream_index] = output_items[stream_index];
-            _bufferSpaceRemaining[stream_index] = noutput_items;
-            _bufferOffset[stream_index] = 0;
-            if (_output_type == fc32) {
-                hasSpaceRemaining[stream_index] = process_overflow_buffer<gr_complex>(stream_index);
-            } else if (_output_type == sc16) {
-                hasSpaceRemaining[stream_index] = process_overflow_buffer<short[2]>(stream_index);
-            } else {
-                std::cerr << "Invalid output type: " << _output_type << std::endl;
-                return noutput_items;
-            }
-            if (hasSpaceRemaining[stream_index])
-            {
-                _bufferReady[stream_index].notify_one();
-            }
-        }
-
-        if (!hasSpaceRemaining[0] && (nstreams < 2 || !hasSpaceRemaining[1]))
-        {
-            return 0;
-        }
-
-        for (int stream_index = 0; stream_index < nstreams; ++stream_index)
-        {
-            if (hasSpaceRemaining[stream_index])
-            {
-                while (_buffer[stream_index] && (_device_status & Streaming))
-                {
-                    _bufferReady[stream_index].wait(lock);
-                }
-            }
-        }
-    }
-
-    buffers_sanity_check(nstreams);
-
-    if (_device_status & Streaming)
-    {
-        return 0;
-    }
-
-    return noutput_items;
-}
-
 void rsp_dev::set_biasT(bool biasT)
 {
     _biasT = biasT;
@@ -1061,190 +1120,127 @@ size_t rsp_dev::output_size(const std::string& output_type)
     return 0;
 }
 
-void rsp_dev::flush() {
-    return;
-}
-
-bool rsp_dev::configure_rspduo()
+int rsp_dev::fetch_work_buffers(gr_vector_void_star &output_items,
+                                int noutput_items)
 {
-    // set RSPduo mode
-    if (!(_rspduo_mode & _device.rspDuoMode))
+    if (!(_device_status & Streaming))
     {
-        std::cerr << "Invalid RSPduo mode - valid modes are: " << _device.rspDuoMode << std::endl;
-        return false;
-    }
-    _device.rspDuoMode = (sdrplay_api_RspDuoModeT)_rspduo_mode;
-
-    // set RSPduo mode
-    _device.tuner = sdrplay_api_Tuner_Neither;
-    if (_rspduo_mode == sdrplay_api_RspDuoMode_Single_Tuner ||
-        _rspduo_mode == sdrplay_api_RspDuoMode_Master)
-    {
-        if (_antenna == "T1_50ohm" || _antenna == "HIGHZ")
-        {
-            _device.tuner = sdrplay_api_Tuner_A;
-        }
-        else if (_antenna == "T2_50ohm")
-        {
-            _device.tuner = sdrplay_api_Tuner_B;
-        }
+        std::cerr << "device is not streaming\n";
+        return noutput_items;
     }
 
-    // check antenna configuraion in slave mode
-    if (_rspduo_mode == sdrplay_api_RspDuoMode_Slave)
+    int nstreams = output_items.size();
+
     {
-        if (_device.tuner == sdrplay_api_Tuner_A &&
-            !(_antenna == "T1_50ohm" || _antenna == "HIGHZ"))
+        boost::mutex::scoped_lock lock(_bufferMutex);
+        bool hasSpaceRemaining[2];
+        for (int stream_index = 0; stream_index < nstreams; ++stream_index)
         {
-            _antenna = "T1_50ohm";
-            std::cerr << "Invalid RSPduo antenna in slave mode - forcing " << _antenna << " antenna" << std::endl;
-        }
-        else if (_device.tuner == sdrplay_api_Tuner_B &&
-                 !(_antenna == "T2_50ohm"))
-        {
-            _antenna = "T2_50ohm";
-            std::cerr << "Invalid RSPduo antenna in slave mode - forcing " << _antenna << " antenna" << std::endl;
-        }
-    }
-
-    // set sample freq
-    if (_rspduo_mode == sdrplay_api_RspDuoMode_Dual_Tuner ||
-        _rspduo_mode == sdrplay_api_RspDuoMode_Master)
-    {
-        _device.rspDuoSampleFreq = _rspduo_sample_freq;
-    }
-
-    return true;
-}
-
-bool rsp_dev::select_rsp_device()
-{
-    unsigned int numDevices;
-    sdrplay_api_DeviceT sdrplayDevices[MAX_SUPPORTED_DEVICES];
-    sdrplay_api_LockDeviceApi();
-    sdrplay_api_GetDevices(sdrplayDevices, &numDevices, MAX_SUPPORTED_DEVICES);
-
-    int _devIndex = 0;
-
-    if (_deviceIndexOrSerial.length() > 2 /*It's a SerialNo*/)
-    {
-        bool match = false;
-
-        for (unsigned int i = 0; i < numDevices; i++)
-        {
-            if (_deviceIndexOrSerial.compare(std::string(sdrplayDevices[i].SerNo)) == 0)
+            _buffer[stream_index] = output_items[stream_index];
+            _bufferSpaceRemaining[stream_index] = noutput_items;
+            _bufferOffset[stream_index] = 0;
+            if (_output_type == fc32) {
+                hasSpaceRemaining[stream_index] = process_overflow_buffer<gr_complex>(stream_index);
+            } else if (_output_type == sc16) {
+                hasSpaceRemaining[stream_index] = process_overflow_buffer<short[2]>(stream_index);
+            } else {
+                std::cerr << "Invalid output type: " << _output_type << std::endl;
+                return noutput_items;
+            }
+            if (hasSpaceRemaining[stream_index])
             {
-                std::cerr << "Found requested RSP with SerialNO: " << sdrplayDevices[i].SerNo << std::endl;
-                _devIndex = i;
-                match = true;
-                break;
+                _bufferReady[stream_index].notify_one();
             }
         }
 
-        if (!match)
+        if (!hasSpaceRemaining[0] && (nstreams < 2 || !hasSpaceRemaining[1]))
         {
-            std::cerr << "FALLBACK TO DEV INDEX = !!!! Could NOT find RSP SerialNO: " << _deviceIndexOrSerial << std::endl;
+            return 0;
         }
-    } else {
-        _devIndex = strtol(_deviceIndexOrSerial.c_str(), NULL, 0);
-        if (_devIndex < 0 || _devIndex >= numDevices) {
-            std::cerr << "FALLBACK TO DEV INDEX = 0 !!!! Could NOT find RSP with index: " << _deviceIndexOrSerial << std::endl;
+
+        for (int stream_index = 0; stream_index < nstreams; ++stream_index)
+        {
+            if (hasSpaceRemaining[stream_index])
+            {
+                while (_buffer[stream_index] && (_device_status & Streaming))
+                {
+                    _bufferReady[stream_index].wait(lock);
+                }
+            }
         }
     }
 
-    _device = sdrplayDevices[_devIndex];
-    _hwVer = _device.hwVer;
+    buffers_sanity_check(nstreams);
 
-    if (_hwVer == SDRPLAY_RSPduo_ID)
-    {
-        if (!configure_rspduo())
-            return false;
-    }
-
-    sdrplay_api_SelectDevice(&_device);
-    sdrplay_api_UnlockDeviceApi();
-
-    _device_status |= Selected;
-
-    std::cerr << "Using SDRplay " << hwName(_hwVer) << " "
-              << sdrplayDevices[_devIndex].SerNo << std::endl;
-
-    sdrplay_api_DebugEnable(_device.dev, _debug ? sdrplay_api_DbgLvl_Verbose : sdrplay_api_DbgLvl_Disable);
-
-    sdrplay_api_GetDeviceParams(_device.dev, &_deviceParams);
-
-    _chParams = _deviceParams->rxChannelA;
-    _dualchParams = NULL;
-    if (_device.tuner == sdrplay_api_Tuner_B)
-    {
-        _chParams = _deviceParams->rxChannelB;
-    }
-    else if (_device.tuner == sdrplay_api_Tuner_Both)
-    {
-        _dualchParams = _deviceParams->rxChannelB;
-    }
-
-    return true;
-}
-
-bool rsp_dev::start() {
     if (_device_status & Streaming)
     {
-        return true;
+        return 0;
     }
 
-    if (!(_device_status & Selected))
-    {
-        if (!select_rsp_device()) {
-            return false;
-        }
-        sdrplay_api::get_instance().add_active_rsp(this);
-    }
-
-    if (!(_device_status & Streaming))
-    {
-        if (!start_streaming()) {
-            return false;
-        }
-    }
-
-    return true;
+    return noutput_items;
 }
 
-bool rsp_dev::release_rsp_device()
+// pull the samples from the overflow buffer, returns true if there's still
+// space left in in the gnuradio buffer
+template <class T>
+bool rsp_dev::process_overflow_buffer(int si)
 {
-    sdrplay_api_ReleaseDevice(&_device);
-    _device_status &= ~Selected;
-    return true;
-}
-
-bool rsp_dev::stop() {
-    if (_device_status == None)
-    {
+    int num_overflow = _overflowBufferLast[si] - _overflowBufferFirst[si];
+    if (num_overflow == 0)
         return true;
-    }
-
-    if (_device_status & Streaming)
+    T *buf = static_cast<T*>(_buffer[si]) + _bufferOffset[si];
+    int ncopy = std::min(num_overflow, _bufferSpaceRemaining[si]);
+    short *xi = _overflowBuffer[si][0] + _overflowBufferFirst[si];
+    short *xq = _overflowBuffer[si][1] + _overflowBufferFirst[si];
+    xcopy(buf, xi, xq, ncopy);
+    _bufferOffset[si] += ncopy;
+    _bufferSpaceRemaining[si] -= ncopy;
+    _overflowBufferFirst[si] += ncopy;
+    if (_overflowBufferFirst[si] == _overflowBufferLast[si])
     {
-        if (!stop_streaming()) {
-            return false;
-        }
+        _overflowBufferFirst[si] = 0;
+        _overflowBufferLast[si]  = 0;
     }
-
-    if (_device_status & Selected)
-    {
-        if (!release_rsp_device()) {
-            return false;
-        }
-        sdrplay_api::get_instance().remove_active_rsp(this);
-    }
-    return true;
+    return _bufferSpaceRemaining[si] > 0;
 }
 
+// make sure that bufferSpaceRemaining == 0 and that all the overflow buffers
+// have the same number of samples
+bool rsp_dev::buffers_sanity_check(int nstreams)
+{
+    bool is_ok = true;
+    for (int stream_index = 0; stream_index < nstreams; ++stream_index)
+    {
+        if (_bufferSpaceRemaining[stream_index] != 0)
+        {
+             std::cerr << "stream " << stream_index << " has still space remanining\n";
+             is_ok = false;
+        }
+    }
+    if (nstreams == 1)
+        return is_ok;
+    int num_overflow[2] = { _overflowBufferLast[0] - _overflowBufferFirst[0],
+                            _overflowBufferLast[1] - _overflowBufferFirst[1] };
+    int min_overflow = std::min(num_overflow[0], num_overflow[1]);
+    for (int stream_index = 0; stream_index < nstreams; ++stream_index)
+    {
+        if (num_overflow[stream_index] > min_overflow)
+        {
+             std::cerr << "discarding " << (num_overflow[stream_index] - min_overflow) << " items (" << _overflowBufferFirst[0] << ", " << _overflowBufferLast[0] << ") and (" << _overflowBufferFirst[1] << ", " << _overflowBufferLast[1] << ") from stream " << stream_index << "\n";
+             _overflowBufferLast[stream_index] = _overflowBufferFirst[stream_index] + min_overflow;
+             is_ok = false;
+        }
+    }
+    return is_ok;
+}
+
+
+// signal handler to make sure std::exit is called (instead of std::terminate)
 void signal_handler(int signum)
 {
     std::exit(signum);
 }
+
 
 // Singleton class for SDRplay API (only one per process)
 sdrplay_api::sdrplay_api()

@@ -45,6 +45,10 @@ namespace gr {
 
             void list_available_rsp_devices();
 
+            bool start();
+
+            bool stop();
+
             double set_sample_rate(double rate);
 
             double get_sample_rate() const;
@@ -79,13 +83,6 @@ namespace gr {
 
             double get_bandwidth() const;
 
-            bool start_streaming();
-
-            bool stop_streaming();
-
-            int fetch_work_buffers(gr_vector_void_star &output_items,
-                                   int noutput_items);
-
             void set_biasT(bool biasT);
 
             void set_deviceIndexOrSerial(const std::string &deviceIndexOrSerial);
@@ -96,28 +93,10 @@ namespace gr {
 
             static size_t output_size(const std::string& output_type);
 
-            void flush();
-
-            bool configure_rspduo();
-
-            bool select_rsp_device();
-
-            bool start();
-
-            bool release_rsp_device();
-
-            bool stop();
+            int fetch_work_buffers(gr_vector_void_star &output_items,
+                                   int noutput_items);
 
         private:
-            void reinitDevice(int reason);
-
-            int checkLNA(int lna);
-
-            template <class T>
-            bool process_overflow_buffer(int stream_index);
-
-            bool buffers_sanity_check(int nstreams);
-
             static void *xcopy(gr_complex *dest, const short *srci,
                                const short *srcq, int n);
 
@@ -155,6 +134,26 @@ namespace gr {
                                           sdrplay_api_TunerSelectT tuner,
                                           sdrplay_api_EventParamsT *params,
                                           void *cbContext);
+
+            bool configure_rspduo();
+
+            bool select_rsp_device();
+
+            bool start_streaming();
+
+            bool release_rsp_device();
+
+            bool stop_streaming();
+
+            void reinitDevice(int reason);
+
+            int checkLNA(int lna);
+
+            template <class T>
+            bool process_overflow_buffer(int stream_index);
+
+            bool buffers_sanity_check(int nstreams);
+
 
             bool _auto_gain;
             int _gRdB;

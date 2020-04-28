@@ -106,6 +106,7 @@ namespace gr {
         void rsp1a_source_impl::set_lna_atten_step(int lna_atten_step) {
             dev->set_gain(lna_atten_step, "LNA_ATTEN_STEP");
         }
+
     } /* namespace rsp */
 } /* namespace gr */
 
